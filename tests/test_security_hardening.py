@@ -111,7 +111,7 @@ def test_artwork_rejects_untrusted_destinations(url):
 
 
 @pytest.mark.parametrize('address', ['127.0.0.1', '192.168.1.1', '169.254.169.254', '::1',
-                                   '::ffff:8.8.8.8', '10.0.0.1'])
+                                   '::ffff:8.8.8.8', '10.0.0.1', '224.0.0.1'])
 def test_artwork_rejects_private_dns(monkeypatch, address):
     monkeypatch.setattr(socket, 'getaddrinfo', lambda *a, **k: [(0, 0, 0, '', (address, 443))])
     with pytest.raises(ValueError):
@@ -121,8 +121,11 @@ def test_artwork_rejects_private_dns(monkeypatch, address):
 class Response:
     status = 200
     headers = {}
-    def stream(self, *args, **kwargs):
-        yield b'picture'
+    def read1(self, *args, **kwargs):
+        if getattr(self, '_read', False):
+            return b''
+        self._read = True
+        return b'picture'
     def close(self):
         pass
 
@@ -164,6 +167,14 @@ def test_artwork_stream_size_is_bounded(monkeypatch):
     mock_download(monkeypatch, Response())
     monkeypatch.setattr(safe_download, 'MAX_BYTES', 3)
     with pytest.raises(ValueError, match='size limit'):
+        safe_download.fetch_artwork('https://img.nintendo.com/art.jpg')
+
+
+def test_artwork_slow_body_obeys_deadline(monkeypatch):
+    mock_download(monkeypatch, Response())
+    ticks = iter([0, 1, 2, 31])
+    monkeypatch.setattr(safe_download.time, 'monotonic', lambda: next(ticks))
+    with pytest.raises(ValueError, match='time limit'):
         safe_download.fetch_artwork('https://img.nintendo.com/art.jpg')
 
 

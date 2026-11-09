@@ -33,7 +33,8 @@ def destination(url):
         raise ValueError('Artwork host has no addresses')
     for address in addresses:
         ip = ipaddress.ip_address(address)
-        if not ip.is_global or (ip.version == 6 and ip.ipv4_mapped is not None):
+        if (not ip.is_global or ip.is_multicast or ip.is_reserved
+                or (ip.version == 6 and ip.ipv4_mapped is not None)):
             raise ValueError('Artwork host must resolve only to public addresses')
     return parsed, host, sorted(addresses)[0]
 
@@ -70,9 +71,14 @@ def fetch_artwork(url):
             if response.headers.get('Content-Encoding', 'identity').lower() != 'identity':
                 raise ValueError('Compressed HTTP artwork bodies are not supported')
             body = bytearray()
-            for chunk in response.stream(65536, decode_content=False):
+            while True:
+                # read1 returns after one underlying read. stream/read can wait
+                # for a whole chunk while a peer drips bytes below the idle timeout.
                 if time.monotonic() > deadline:
                     raise ValueError('Artwork download exceeded time limit')
+                chunk = response.read1(65536, decode_content=False)
+                if not chunk:
+                    break
                 if len(body) + len(chunk) > MAX_BYTES:
                     raise ValueError('Artwork exceeds size limit')
                 body.extend(chunk)
