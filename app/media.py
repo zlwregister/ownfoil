@@ -21,8 +21,8 @@ import threading
 import time
 from urllib.parse import urlparse
 
-import requests
 from PIL import Image
+from safe_download import fetch_artwork
 
 from constants import MEDIA_DIR
 from titledb.schema import SOURCE_EXTRACT
@@ -134,7 +134,7 @@ def have(kind, filename):
 
 def dimensions(kind, filename):
     """Size of the stored original, as (w, h). Every rendition's size follows from it."""
-    with Image.open(media_path(kind, ORIGINAL, filename)) as image:
+    with Image.open(media_path(kind, ORIGINAL, filename), formats=['JPEG', 'PNG', 'WEBP']) as image:
         return image.size
 
 
@@ -192,9 +192,7 @@ def collect(keep, grace=COLLECT_GRACE):
 
 def fetch(url):
     """Download one image. Raises on anything but a successful response."""
-    response = requests.get(url, timeout=TIMEOUT)
-    response.raise_for_status()
-    return response.content
+    return fetch_artwork(url)
 
 
 def _render(image, kind, size):
@@ -213,7 +211,11 @@ def store_bytes(kind, data, filename=None):
     if not _SAFE_FILENAME.match(filename):
         raise ValueError(f'Unsafe media filename: {filename}')
 
-    with Image.open(io.BytesIO(data)) as image:
+    if len(data) > 10 * 1024 * 1024:
+        raise ValueError('Artwork exceeds size limit')
+    with Image.open(io.BytesIO(data), formats=['JPEG', 'PNG', 'WEBP']) as image:
+        if image.width * image.height > 16_000_000:
+            raise ValueError('Artwork exceeds pixel limit')
         image.load()
         size = image.size
         renditions = {rendition: _render(image, kind, rendition) for rendition in RENDITIONS}
@@ -233,7 +235,9 @@ def build(kind, size, filename):
         return True
     if not have(kind, filename):
         return False
-    with Image.open(media_path(kind, ORIGINAL, filename)) as image:
+    with Image.open(media_path(kind, ORIGINAL, filename), formats=['JPEG', 'PNG', 'WEBP']) as image:
+        if image.width * image.height > 16_000_000:
+            raise ValueError('Artwork exceeds pixel limit')
         image.load()
         rendered = _render(image, kind, size)
     _write(kind, size, filename, rendered)

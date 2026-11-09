@@ -1,0 +1,11 @@
+.git
+.github
+work
+tests
+.env
+.env.*
+config
+data
+dist
+__pycache__
+*.pyc

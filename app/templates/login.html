@@ -11,6 +11,7 @@
                         <img src="{{ url_for('static', filename='logo/logo.svg') }}" style="width: 128px;" alt="logo">
                     </div>
                     <form method="POST" action="/login"><p>Please login to your account</p>
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                         <div class="mb-4">
                             <input class="form-control" name="user" id="exampleInputEmail1" placeholder="Username">
                         </div>

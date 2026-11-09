@@ -1,22 +1,26 @@
-version: "3"
-
 services:
   ownfoil:
+    image: ghcr.io/zlwregister/ownfoil:hardened
     container_name: ownfoil
-    image: a1ex4/ownfoil:latest
+    restart: unless-stopped
+    user: "${OWNFOIL_UID:?Set dedicated NAS account UID}:${OWNFOIL_GID:?Set NAS account GID}"
     environment:
-      # For write permission in config directory
-      - PUID=1000
-      - PGID=1000
-      # to create/update an admin user at startup
-      # - USER_ADMIN_NAME=admin
-      # - USER_ADMIN_PASSWORD=asdvnf!546
-      # to create/update a regular user at startup
-      # - USER_GUEST_NAME=guest
-      # - USER_GUEST_PASSWORD=oerze!@8981
+      USER_ADMIN_NAME: "${USER_ADMIN_NAME:?Set Ownfoil admin name}"
+      USER_ADMIN_PASSWORD: "${USER_ADMIN_PASSWORD:?Set unique Ownfoil admin password}"
+      USER_GUEST_NAME: "${USER_GUEST_NAME:?Set Switch account name}"
+      USER_GUEST_PASSWORD: "${USER_GUEST_PASSWORD:?Set unique Switch password}"
     volumes:
-      - /your/game/directory:/games
-      - ./config:/app/config
-      - ./data:/app/data
+      - "${GAMES_DIR:?Set exact games directory}:/games:ro"
+      - ./config:/app/config:rw
+      - ./data:/app/data:rw
     ports:
-      - "8465:8465"
+      - "${NAS_LAN_IP:?Set NAS LAN address}:8465:8465/tcp"
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=128m,mode=1777
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 128
+    mem_limit: 1536m

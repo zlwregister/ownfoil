@@ -11,6 +11,21 @@
     {%endif%}
     <link rel="stylesheet" href="{{ url_for('static', filename='vendor/bootstrap/bootstrap.min.css') }}">
     <script src="{{ url_for('static', filename='vendor/jquery/jquery.min.js') }}"></script>
+    <script>
+        const ownfoilCsrf = {{ csrf_token() | tojson }};
+        $.ajaxSetup({beforeSend: function(xhr, settings) {
+            if (!/^(GET|HEAD|OPTIONS)$/i.test(settings.type) && !settings.crossDomain)
+                xhr.setRequestHeader('X-CSRF-Token', ownfoilCsrf);
+        }});
+        const ownfoilFetch = window.fetch;
+        window.fetch = function(input, init) {
+            const req = new Request(input, init);
+            if (new URL(req.url).origin === location.origin && !/^(GET|HEAD|OPTIONS)$/i.test(req.method)) {
+                req.headers.set('X-CSRF-Token', ownfoilCsrf);
+            }
+            return ownfoilFetch(req);
+        };
+    </script>
     <script src="{{ url_for('static', filename='vendor/bootstrap/bootstrap.bundle.min.js') }}"></script>
     <link rel="stylesheet" href="{{ url_for('static', filename='vendor/bootstrap-icons/bootstrap-icons.min.css') }}">
 

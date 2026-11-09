@@ -12,6 +12,7 @@ import os
 import re
 import threading
 import time
+from security import login_allowed, login_result, safe_next
 
 # Retrieve main logger
 logger = logging.getLogger('main')
@@ -167,11 +168,15 @@ def basic_auth(request):
     error = ''
     user = None
 
+    address = request.remote_addr or 'unknown'
     auth = request.authorization
     if auth is None:
         success = False
         error = 'No authentication provided.'
         return success, error, user
+
+    if not login_allowed(address):
+        return False, 'Too many authentication failures; try again later.', None
 
     username = auth.username
     password = auth.password
@@ -180,10 +185,11 @@ def basic_auth(request):
         success = False
         error = f'Unknown user {username}.'
     
-    elif not verify_password(user.password, password):
+    elif not password or not verify_password(user.password, password):
         success = False
         error = f'Incorrect password for user {username}.'
 
+    login_result(address, success)
     return success, error, user
 
 def check_shop_access(request, auth=None):
@@ -287,11 +293,13 @@ def init_users(app):
             init_user_from_environment(environment_name="USER_ADMIN", admin=True)
         if os.environ.get('USER_GUEST_NAME') is not None:
             init_user_from_environment(environment_name="USER_GUEST", admin=False)
+        if not admin_account_created():
+            raise RuntimeError('Set USER_ADMIN_NAME and USER_ADMIN_PASSWORD before starting Ownfoil.')
 
 @auth_blueprint.route("/login", methods=["GET", "POST"])
 def login():
     if request.method == "GET":
-        next_url = request.args.get('next', '')
+        next_url = safe_next(request.args.get('next', ''))
         if current_user.is_authenticated:
             return redirect(next_url if len(next_url) else '/')
         return render_template('login.html', title='Login')
@@ -300,18 +308,23 @@ def login():
     username = request.form.get('user')
     password = request.form.get('password')
     remember = bool(request.form.get('remember'))
-    next_url = request.form.get('next', '')
+    next_url = safe_next(request.form.get('next', ''))
+    address = request.remote_addr or 'unknown'
+    if not login_allowed(address):
+        return 'Too many authentication failures; try again later.', 429
 
     user = User.query.filter_by(user=username).first()
 
     # check if the user actually exists
     # take the user-supplied password, hash it, and compare it to the hashed password in the database
-    if not user or not verify_password(user.password, password):
+    if not user or not password or not verify_password(user.password, password):
+        login_result(address, False)
         logger.warning(f'Incorrect login for user {username}')
         return redirect(url_for('auth.login')) # if the user doesn't exist or password is wrong, reload the page
 
     # if the above check passes, then we know the user has the right credentials
     logger.info(f'Sucessfull login for user {username}')
+    login_result(address, True)
     login_user(user, remember=remember)
 
     return redirect(next_url if len(next_url) else '/')
@@ -338,6 +351,9 @@ def delete_user():
     success = True
     data = request.json
     user_id = data['user_id']
+    target = db.session.get(User, user_id)
+    if target and target.admin_access and admin_account_created() <= 1:
+        return jsonify({'success': False, 'error': 'Cannot delete the last administrator.'}), 409
     try:
         User.query.filter_by(id=user_id).delete()
         db.session.commit()

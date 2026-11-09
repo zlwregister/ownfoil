@@ -33,6 +33,40 @@ sys.argv = sys.argv[:1]
 
 import pytest
 
+# Existing integration tests exercise browser actions. Simulate the browser's
+# CSRF header so they continue testing their own behavior with CSRF enabled.
+# Security regression tests instantiate raw FlaskClient to test missing tokens.
+from flask import Flask
+from flask.testing import FlaskClient
+import secrets
+from functools import lru_cache
+from werkzeug.security import generate_password_hash
+
+# The fixture users have fixed test passwords. Reuse their real scrypt hashes
+# instead of spending most of a 1900+ test run hashing the same inputs repeatedly.
+_fixture_password_hash = lru_cache(maxsize=128)(generate_password_hash)
+
+
+class BrowserClient(FlaskClient):
+    def open(self, *args, **kwargs):
+        method = kwargs.get('method', 'GET').upper()
+        if method not in ('GET', 'HEAD', 'OPTIONS'):
+            with self.session_transaction() as session:
+                token = session.setdefault('_csrf_token', secrets.token_urlsafe(32))
+            kwargs['headers'] = {**dict(kwargs.get('headers') or {}), 'X-CSRF-Token': token}
+        return super().open(*args, **kwargs)
+
+
+Flask.test_client_class = BrowserClient
+
+
+@pytest.fixture(autouse=True)
+def reset_auth_throttle(monkeypatch):
+    import security
+    import auth
+    security._attempts.clear()
+    monkeypatch.setattr(auth, 'generate_password_hash', _fixture_password_hash)
+
 
 @pytest.fixture
 def shop_app(tmp_path, monkeypatch):

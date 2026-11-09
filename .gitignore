@@ -22,6 +22,8 @@ tests/capture/.workdir
 /dist
 ownfoil.bat
 uv.lock
+/work/
+/.env
 
 .claude
 CLAUDE.local.md

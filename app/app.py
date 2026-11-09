@@ -171,10 +171,20 @@ def create_app(db_uri=None):
 
     app.register_blueprint(auth_blueprint)
 
+    from security import install_browser_protection
+    install_browser_protection(app)
+
     return app
 
 # Create app
 app = create_app()
+
+
+@app.before_request
+def require_initialized_admin():
+    # The deployed app never reverts to upstream's unauthenticated setup mode.
+    if not admin_account_created():
+        return 'Ownfoil requires an administrator configured at startup.', 503
 
 # Realtime WebSocket. ping_interval keeps idle sockets alive through proxies and lets
 # the server notice a peer that went away without closing.

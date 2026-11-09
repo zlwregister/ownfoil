@@ -1,3 +1,5 @@
+> **Hardened personal NAS fork:** Read [HARDENED-NAS.md](HARDENED-NAS.md) before deploying. This fork requires admin setup at startup, uses a non-root image, and replaces the upstream Docker instructions below. Security fixes reduce risk; they do not guarantee safety.
+
 # <img src="https://github.com/user-attachments/assets/3cfdf010-50c3-41ae-aa86-e31b22466686" height="28"> Ownfoil
 [![Static Badge](https://img.shields.io/badge/github-repo-blue?logo=github)](https://github.com/a1ex4/ownfoil)
 [![Latest Release](https://img.shields.io/docker/v/a1ex4/ownfoil?sort=semver)](https://github.com/a1ex4/ownfoil/releases/latest)

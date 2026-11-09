@@ -17,10 +17,10 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
       - name: Set up uv
-        uses: astral-sh/setup-uv@v7
+        uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7
         with:
           python-version: '3.14'
           enable-cache: true
@@ -30,8 +30,10 @@ jobs:
         run: uv venv
 
       - name: Install dependencies
-        run: uv pip install --requirement requirements.txt pytest
+        run: |
+          uv pip install --require-hashes --requirement requirements.lock
+          uv pip install pytest
 
       - name: Run tests
-        run: uv run pytest tests -v
+        run: uv run --no-project pytest tests -v
         timeout-minutes: 20
